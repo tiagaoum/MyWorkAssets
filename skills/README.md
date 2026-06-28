@@ -1,6 +1,11 @@
 # Skills
 
-Coleção de skills customizadas para Claude Code. Cada arquivo `.skill` é portável e pode ser instalado em qualquer projeto.
+Coleção de automações reutilizáveis para agentes de IA. Cada skill existe em dois formatos:
+
+| Formato | Arquivo | Agente |
+|---------|---------|--------|
+| `.skill` | Zip com `SKILL.md` + referências | **Claude Code** |
+| `.playbook.md` | Markdown com instruções diretas | **Devin** (e outros agentes) |
 
 ---
 
@@ -12,35 +17,36 @@ Coleção de skills customizadas para Claude Code. Cada arquivo `.skill` é port
 
 ## aws-sqs-kms-remediation
 
-**Arquivo:** `aws-sqs-kms-remediation.skill`
+Resolve o finding de cyber score que aponta filas SQS da AWS sem criptografia KMS.
+Detecta recursos não conformes em repositórios Terraform e CloudFormation, aplica as correções e entrega um commit + pull request.
 
-Resolve o finding de cyber score que aponta filas SQS da AWS sem criptografia KMS. Detecta recursos não conformes em repositórios Terraform e CloudFormation, aplica as correções necessárias e entrega um commit + pull request pronto.
+### Arquivos
 
-### O que a skill faz
+```
+skills/
+├── aws-sqs-kms-remediation.skill          # Claude Code
+└── aws-sqs-kms-remediation.playbook.md    # Devin
+```
 
-1. Varre o repositório em busca de recursos `aws_sqs_queue` (Terraform) ou `AWS::SQS::Queue` (CloudFormation) sem `kms_master_key_id` / `KmsMasterKeyId`
-2. Reporta quantas filas estão não conformes antes de alterar qualquer arquivo
-3. Aplica a chave KMS em todos os recursos afetados — incluindo DLQs e filas FIFO
-4. Roda `terraform fmt` ou `cfn-lint` se disponíveis no ambiente
-5. Cria a branch `fix/sqs-kms-encryption`, commita apenas os arquivos alterados e abre o PR via `gh`
+---
 
-### Instalação
+### Uso com Claude Code
 
-**Opção A — via Claude Code (recomendado):**
+**Instalação:**
 
-Copie o arquivo `.skill` para o projeto de destino e rode no terminal do Claude Code:
+Copie `aws-sqs-kms-remediation.skill` para o projeto e rode no Claude Code:
 
 ```
 /install-skill aws-sqs-kms-remediation.skill
 ```
 
-**Opção B — manual:**
+Ou instale manualmente:
 
-1. Extraia o `.skill` (é um zip) dentro de:
+1. Extraia o `.skill` (é um zip) em:
    ```
    ~/.claude/plugins/cache/claude-plugins-official/aws-sqs-kms-remediation/1.0.0/skills/
    ```
-2. Adicione a entrada abaixo em `~/.claude/plugins/installed_plugins.json`, dentro do objeto `"plugins"`:
+2. Adicione em `~/.claude/plugins/installed_plugins.json`:
    ```json
    "aws-sqs-kms-remediation@claude-plugins-official": [
      {
@@ -54,46 +60,45 @@ Copie o arquivo `.skill` para o projeto de destino e rode no terminal do Claude 
    ```
 3. Reinicie o Claude Code.
 
-### Como usar
+**Como acionar:**
 
-A skill dispara automaticamente quando você menciona qualquer um dos termos abaixo em uma conversa com Claude Code dentro de um repositório IaC:
-
-| Português | Inglês |
-|-----------|--------|
-| "SQS sem KMS" | "SQS without KMS" |
-| "remediar SQS" | "fix SQS encryption" |
-| "corrigir cyber score SQS" | "SQS KMS finding" |
-| "regularizar SQS" | "SQS security score" |
-| "SQS não tem KMS" | "enable KMS on SQS" |
-
-**Exemplo de prompt:**
+A skill dispara automaticamente ao mencionar qualquer termo relacionado no contexto de um repositório IaC:
 
 ```
-Tenho um repositório Terraform aqui. Preciso resolver o finding de cyber score
-das filas SQS que não possuem KMS. Pode remediar e abrir um PR?
+Tenho um repositório Terraform com filas SQS sem KMS. Pode remediar e abrir um PR?
 ```
+
+---
+
+### Uso com Devin
+
+**Instalação:**
+
+1. No Devin, acesse **Knowledge → Playbooks → New Playbook**
+2. Cole o conteúdo de `aws-sqs-kms-remediation.playbook.md`
+3. Salve com o nome `AWS SQS KMS Remediation`
+
+**Como acionar:**
+
+Referencie o playbook explicitamente ao iniciar uma sessão:
+
+```
+Use the playbook "AWS SQS KMS Remediation" to fix all SQS queues
+without KMS encryption in this repository and open a PR.
+```
+
+---
 
 ### Estratégias de chave KMS
 
-| Estratégia | Quando usar | Como especificar no prompt |
-|------------|-------------|---------------------------|
-| AWS managed (`alias/aws/sqs`) | Correção rápida, sem custo de gestão de chave | "usa a chave gerenciada da AWS" ou não especificar nada (padrão) |
-| CMK existente | Organização já tem uma CMK para SQS | "usa a chave `alias/minha-chave`" ou "usa o ARN `arn:aws:kms:...`" |
-| Nova CMK | Requisito de BYOK / controle total do ciclo de vida | "cria uma nova CMK para as filas" |
+| Estratégia | Quando usar | Como especificar |
+|------------|-------------|-----------------|
+| AWS managed (`alias/aws/sqs`) | Correção rápida, sem gestão adicional | Não especificar nada (padrão) |
+| CMK existente | Organização já tem uma CMK para SQS | "usa a chave `alias/minha-chave`" |
+| Nova CMK | Requisito BYOK / controle total | "cria uma nova CMK para as filas" |
 
 ### Requisitos
 
-- `git` disponível no PATH
-- `gh` (GitHub CLI) para criação automática do PR — sem ele, a skill commita e instrui a abrir o PR manualmente
-- Terraform ou arquivos CloudFormation no repositório atual
-
-### Conteúdo do arquivo .skill
-
-```
-aws-sqs-kms-remediation/
-├── SKILL.md                        # Fluxo principal (5 passos)
-└── references/
-    ├── terraform.md                # Padrões de patch para HCL
-    ├── cloudformation.md           # Padrões para YAML/JSON CFN
-    └── key-strategy.md             # Decisão de chave + boilerplate CMK
-```
+- `git` no PATH
+- `gh` (GitHub CLI) para criação automática do PR — sem ele, o agente commita e instrui a abrir o PR manualmente
+- Terraform (`.tf`) ou CloudFormation (`.yaml`/`.yml`/`.json`) no repositório
