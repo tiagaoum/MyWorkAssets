@@ -1,3 +1,0 @@
-# My Work Assets
-
-Hello!
